@@ -40,19 +40,19 @@ public final class TouchCounter: Sendable {
 }
 
 extension UIWindow {
-    public func swizzle() {
+    public static func swizzle() {
         guard TouchCounter.shared.getSwizzled() == false else { return }
-
+        
         let sendEvent = class_getInstanceMethod(
-            object_getClass(self),
-            #selector(UIApplication.sendEvent(_:))
+            UIWindow.self,
+            #selector(UIWindow.sendEvent(_:))
         )
         let swizzledSendEvent = class_getInstanceMethod(
-            object_getClass(self),
+            UIWindow.self,
             #selector(UIWindow.swizzledSendEvent(_:))
         )
         method_exchangeImplementations(sendEvent!, swizzledSendEvent!)
-
+        
         TouchCounter.shared.setSwizzled()
     }
 
