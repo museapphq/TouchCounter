@@ -10,25 +10,7 @@ public actor TouchCounter: Sendable {
     @Published public private(set) var numDirectActiveTouches: Int = 0
     private var isSwizzled = false
     
-    private init() {
-        Task { @MainActor in
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(Self.applicationDidBecomeActive),
-                name: UIApplication.didBecomeActiveNotification,
-                object: nil
-            )
-        }
-    }
-    
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-    
-    @MainActor
-    @objc private static func applicationDidBecomeActive() {
-        UIApplication.shared.keyWindow?.swizzle()
-    }
+    private init() {}
     
     @MainActor
     func handleEvent(_ event: UIEvent) {
