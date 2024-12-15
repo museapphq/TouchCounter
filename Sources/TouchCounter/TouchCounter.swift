@@ -3,32 +3,18 @@
 
 import UIKit
 
-fileprivate actor SwizzleState {
-    static let shared = SwizzleState()
-    private(set) var isSwizzled = false
-    
-    func setSwizzled() {
-        isSwizzled = true
-    }
-    
-    func getSwizzled() -> Bool {
-        isSwizzled
-    }
-}
-
-public final class TouchCounter {
+public actor TouchCounter: Sendable {
     public static let shared = TouchCounter()
     
     /// The number of active direct touches on the screen
     @Published public private(set) var numDirectActiveTouches: Int = 0
+    private var isSwizzled = false
     
-    private let touchQueue = DispatchQueue(label: "com.touchcounter.queue")
-    
-    private override init() {
+    private init() {
         Task { @MainActor in
             NotificationCenter.default.addObserver(
                 self,
-                selector: #selector(applicationDidBecomeActive),
+                selector: #selector(Self.applicationDidBecomeActive),
                 name: UIApplication.didBecomeActiveNotification,
                 object: nil
             )
@@ -39,30 +25,44 @@ public final class TouchCounter {
         NotificationCenter.default.removeObserver(self)
     }
     
-    @objc private func applicationDidBecomeActive() {
+    @MainActor
+    @objc private static func applicationDidBecomeActive() {
         UIApplication.shared.keyWindow?.swizzle()
     }
     
+    @MainActor
     func handleEvent(_ event: UIEvent) {
-        Task { @MainActor in
-            guard event.type == .touches,
-                  let allTouches = event.allTouches else {
-                return
-            }
-            
-            await touchQueue.async {
-                self.numDirectActiveTouches = allTouches
-                    .filter { $0.type == .direct && $0.phase != .ended && $0.phase != .cancelled }
-                    .count
-            }
+        guard event.type == .touches,
+              let allTouches = event.allTouches else {
+            return
         }
+        
+        let count = allTouches
+            .filter { $0.type == .direct && $0.phase != .ended && $0.phase != .cancelled }
+            .count
+        
+        Task {
+            await self.updateTouchCount(count)
+        }
+    }
+    
+    private func updateTouchCount(_ count: Int) {
+        self.numDirectActiveTouches = count
+    }
+    
+    func getSwizzled() -> Bool {
+        isSwizzled
+    }
+    
+    func setSwizzled() {
+        isSwizzled = true
     }
 }
 
 extension UIWindow {
     public func swizzle() {
         Task {
-            guard await SwizzleState.shared.getSwizzled() == false else { return }
+            guard await TouchCounter.shared.getSwizzled() == false else { return }
             
             let sendEvent = class_getInstanceMethod(
                 object_getClass(self),
@@ -74,7 +74,7 @@ extension UIWindow {
             )
             method_exchangeImplementations(sendEvent!, swizzledSendEvent!)
             
-            await SwizzleState.shared.setSwizzled()
+            await TouchCounter.shared.setSwizzled()
         }
     }
     
