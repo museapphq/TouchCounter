@@ -3,30 +3,15 @@
 
 import UIKit
 
-fileprivate var isSwizzled = false
-
-public final class TouchCounter {
+@MainActor
+public final class TouchCounter: Sendable {
     public static let shared = TouchCounter()
     
     /// The number of active direct touches on the screen
-    public private(set) var numDirectActiveTouches: Int = 0
+    @Published public private(set) var numDirectActiveTouches: Int = 0
+    private var isSwizzled = false
     
-    private override init() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(applicationDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-        )
-    }
-    
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-    
-    @objc private func applicationDidBecomeActive() {
-        UIApplication.shared.keyWindow?.swizzle()
-    }
+    private init() {}
     
     func handleEvent(_ event: UIEvent) {
         guard event.type == .touches,
@@ -34,16 +19,30 @@ public final class TouchCounter {
             return
         }
         
-        numDirectActiveTouches = allTouches
+        let count = allTouches
             .filter { $0.type == .direct && $0.phase != .ended && $0.phase != .cancelled }
             .count
+        
+        self.updateTouchCount(count)
+    }
+    
+    private func updateTouchCount(_ count: Int) {
+        self.numDirectActiveTouches = count
+    }
+    
+    func getSwizzled() -> Bool {
+        isSwizzled
+    }
+    
+    func setSwizzled() {
+        isSwizzled = true
     }
 }
 
 extension UIWindow {
     public func swizzle() {
-        guard isSwizzled == false else { return }
-        
+        guard TouchCounter.shared.getSwizzled() == false else { return }
+
         let sendEvent = class_getInstanceMethod(
             object_getClass(self),
             #selector(UIApplication.sendEvent(_:))
@@ -53,10 +52,10 @@ extension UIWindow {
             #selector(UIWindow.swizzledSendEvent(_:))
         )
         method_exchangeImplementations(sendEvent!, swizzledSendEvent!)
-        
-        isSwizzled = true
+
+        TouchCounter.shared.setSwizzled()
     }
-    
+
     @objc public func swizzledSendEvent(_ event: UIEvent) {
         TouchCounter.shared.handleEvent(event)
         swizzledSendEvent(event)
