@@ -18,3 +18,7 @@ dependencies: [
     .package(url: "https://github.com/museapphq/TouchCounter", branch: "main")
 ]
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
